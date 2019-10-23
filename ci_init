@@ -5,114 +5,203 @@
 readonly REPO_NAME=$1
 readonly REPO_TYPE=$2
 
+# TODO: 使用实际值，或者使用命令行参数
+# readonly REPO_ACCOUNT="rockl2e"
 readonly REPO_ACCOUNT="sanguomao"
 readonly JENKINS_CREDENTIALSID="devops-longguikeji-github-token"
 
-err() {
-  echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')]: $@" >&2
-}
-
-createJob() {
-    # TODO：使用真实ci的url, auth信息
-    curl -X POST http://localhost:8005/createItem?name=${REPO_NAME}.$1 \
-     --data-binary "@config.xml" -H "Content-Type: text/xml" -u admin:admin
-}
-
-if [[ -z ${REPO_NAME} || -z ${REPO_TYPE} ]]; then
-  err """
+help() {
+  echo """
   Script execute failed.
   Usage:
   For example:
       Repo URL: https://github.com/rockl2e/devops.git
-      Repo type: ts-frontend or python-backend
+      Repo type: ts or python
       Run command below to init ci configure:
-      ./ci_init devops python-backend
+      ./ci_init devops python
   """
+}
+
+err() {
+  echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')]: $@" >&2
+  help
+}
+
+initMakefile() {
+  echo "begin initMakefile"
+
+  sed "s/template_repo_name/${REPO_NAME}/g" devops.template/Makefile > Makefile
+  if [ ${REPO_TYPE} == 'ts' ]; then
+    sed -i "" "s/lint-template/npx lint-staged/" Makefile
+    sed -i "" "s/test-template/npm run test:unit/" Makefile
+  elif [ ${REPO_TYPE} == 'python' ]; then
+    sed -i "" "s/lint-template/.git\/hooks\/pre-commit/" Makefile
+    sed -i "" "s/test-template/python manage.py migrate \&\& python manage.py test siteapi.v1.tests/" Makefile
+  else
+    err "Repo type not supported. Please use ts or python."
+    cleanup
+    exit -1
+  fi
+
+  echo "end initMakefile"
+}
+
+initDockerfile() {
+  echo "begin initDockerfile"
+
+  if [ ${REPO_TYPE} == 'ts' ]; then
+    cp devops.template/Dockerfile.ts Dockerfile
+  elif [ ${REPO_TYPE} == 'python' ]; then
+    cp devops.template/Dockerfile.python Dockerfile
+  else
+    err "Repo type not supported. Please use ts or python."
+    cleanup
+    exit -1
+  fi
+
+  echo "end initDockerfile"
+}
+
+initJenkinsfile() {
+  echo "begin initJenkinsfile"
+
+  mkdir devops
+  cp devops.template/Jenkinsfile.* devops/
+  sed -i "" "s/template_repo_name/${REPO_NAME}/g" devops/Jenkinsfile.release
+
+  echo "end initJenkinsfile"
+}
+
+createCIInitBranch() {
+  echo "begin createCIInitBranch"
+
+  git clone https://github.com/${REPO_ACCOUNT}/${REPO_NAME}.git
+  cd ${REPO_NAME}
+  git checkout -b ci_init
+  cp ../Dockerfile .
+  cp -r ../devops .
+  cp ../Makefile .
+  git add .
+  git commit -m 'auto init ci config'
+  git push origin ci_init:ci_init
+  cd ..
+
+  echo "end createCIInitBranch"
+}
+
+createJob() {
+  echo "begin createJob"
+
+  # TODO：使用真实ci的url, auth信息
+  # curl -X POST https://ci.intra.longguikeji.com/createItem?name=${REPO_NAME}.$1 \
+  #   --data-binary "@config.xml" -H "Content-Type: text/xml" -u admin
+  curl -X POST http://localhost:8005/createItem?name=${REPO_NAME}.$1 \
+  --data-binary "@config.xml" -H "Content-Type: text/xml" -u admin
+
+  echo "end createJob"
+}
+
+createJenkinsJobs() {
+  echo "begin createJenkinsJobs"
+
+  sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
+  -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
+  -e "s/template_repo_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}.git/" \
+  -e "s/template_branch_name/\*\*/" \
+  -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.status/" \
+  devops.template/config.xml > config.xml
+
+  createJob status
+
+  sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
+  -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
+  -e "s/template_repo_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}.git/" \
+  -e "s/template_branch_name/master/" \
+  -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.build/" \
+  devops.template/config.xml > config.xml
+
+  createJob build
+
+  sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
+  -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
+  -e "s/template_repo_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}.git/" \
+  -e "s/template_branch_name/master/" \
+  -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.release/" \
+  devops.template/config.release.xml > config.xml
+
+  createJob release
+
+  echo "end createJenkinsJobs"
+}
+
+initRepoSettings() {
+  echo "begin initRepoSettings"
+
+  # TODO：使用真实auth信息
+  # set master branch rules
+  curl -H "Content-type: application/json" -H "Accept: application/vnd.github.luke-cage-preview+json"\
+  -d \
+  '{
+    "required_status_checks": {
+      "strict": true,
+      "contexts": [
+        "continuous-integration/travis-ci"
+      ]
+    },
+    "enforce_admins": false,
+    "required_pull_request_reviews": {
+      "dismiss_stale_reviews": true,
+      "require_code_owner_reviews": false,
+      "required_approving_review_count": 1
+    },
+    "restrictions": null
+  }' \
+  -X PUT https://api.github.com/repos/${REPO_ACCOUNT}/${REPO_NAME}/branches/master/protection \
+  -u ${REPO_ACCOUNT}
+
+  # set repo webhooks
+  curl -H "Content-type: application/json" \
+  -d \
+  '{
+    "name": "web",
+    "active": true,
+    "events": [
+      "push",
+      "pull_request"
+    ],
+    "config": {
+      "url": "https://ci.intra.longguikeji.com/github-webhook",
+      "content_type": "json",
+      "insecure_ssl": "0"
+    }
+  }' \
+  -X POST https://api.github.com/repos/${REPO_ACCOUNT}/${REPO_NAME}/hooks \
+  -u ${REPO_ACCOUNT}
+
+  echo "end initRepoSettings"
+}
+
+cleanup() {
+  rm -f Dockerfile
+  rm -rf devops/
+  rm -f Makefile
+  rm -rf ${REPO_NAME}
+  rm -f config.xml
+}
+
+if [[ $# < 2 ]]; then
+  err "Params number invalid."
   exit -1
 fi
 
-#
-# 初始化Makefile文件
-#
-# sed "s/template_repo_name/${REPO_NAME}/g" devops.template/Makefile > Makefile
-# if [ ${REPO_TYPE} == 'ts-frontend' ]; then
-#   sed -i "" "s/lint-template/npx lint-staged/" Makefile
-#   sed -i "" "s/test-template/npm run test:unit/" Makefile
-# elif [ ${REPO_TYPE} == 'python-backend' ]; then
-#   sed -i "" "s/lint-template/.git\/hooks\/pre-commit/" Makefile
-#   sed -i "" "s/test-template/python manage.py migrate \&\& python manage.py test siteapi.v1.tests/" Makefile
-# else
-#   err "Repo type not supported. Please use ts-frontend or python-backend."
-#   exit -1
-# fi
+initMakefile
+initDockerfile
+initJenkinsfile
+createCIInitBranch
+createJenkinsJobs
+initRepoSettings
+cleanup
 
-# #
-# # 初始化Dockerfile文件
-# #
-# if [ ${REPO_TYPE} == 'ts-frontend' ]; then
-#   cp devops.template/Dockerfile.frontend Dockerfile
-# elif [ ${REPO_TYPE} == 'python-backend' ]; then
-#   cp devops.template/Dockerfile.backend Dockerfile
-# else
-#   err "Repo type not supported. Please use ts-frontend or python-backend."
-#   exit -1
-# fi
 
-# #
-# # 初始化devops目录里的Jenkinsfile
-# #
-# mkdir devops
-# cp -r devops.template/ devops/
-# sed -i "" "s/template_repo_name/${REPO_NAME}/g" ./devops/Jenkinsfile.release
 
-# #
-# # 将初始化得到的Makefile, Dockerfile, devops目录拷贝到repo上新建的ci_init分支
-# #
-# git clone https://github.com/${REPO_ACCOUNT}/${REPO_NAME}.git
-# git checkout -b ci_init
-# cp Dockerfile ${REPO_NAME}/
-# cp -r devops/ ${REPO_NAME}/
-# cp Makefile ${REPO_NAME}/
-# cd ${REPO_NAME}
-# git add .
-# git commit -m 'auto init ci config'
-# git push origin ci_init:ci_init
-# cd ..
-# rm -rf ${REPO_NAME}
 
-#
-# 创建repo相应的jenkins job
-#
-# sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
-# -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
-# -e "s/template_repo_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}.git/" \
-# -e "s/template_branch_name/\*\*/" \
-# -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.status/" \
-# config.template.xml > config.xml
-
-# createJob status
-
-# sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
-# -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
-# -e "s/template_repo_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}.git/" \
-# -e "s/template_branch_name/master/" \
-# -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.build/" \
-# config.template.xml > config.xml
-
-# createJob build
-
-# sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
-# -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
-# -e "s/template_repo_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}.git/" \
-# -e "s/template_branch_name/master/" \
-# -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.release/" \
-# config.release.template.xml > config.xml
-
-# createJob release
-
-# #
-# # 清理生成的临时文件
-# #
-# rm Dockerfile
-# rm -rf devops/
-# rm Makefile
