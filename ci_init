@@ -23,11 +23,13 @@ help() {
 }
 
 err() {
-  echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')]: $@" > &2
+  echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')]: $@" >&2
   help
 }
 
 initMakefile() {
+  echo "begin initMakefile"
+
   sed "s/template_repo_name/${REPO_NAME}/g" devops.template/Makefile > Makefile
   if [ ${REPO_TYPE} == 'ts' ]; then
     sed -i "" "s/lint-template/npx lint-staged/" Makefile
@@ -40,9 +42,13 @@ initMakefile() {
     cleanup
     exit -1
   fi
+
+  echo "end initMakefile"
 }
 
 initDockerfile() {
+  echo "begin initDockerfile"
+
   if [ ${REPO_TYPE} == 'ts' ]; then
     cp devops.template/Dockerfile.ts Dockerfile
   elif [ ${REPO_TYPE} == 'python' ]; then
@@ -52,15 +58,23 @@ initDockerfile() {
     cleanup
     exit -1
   fi
+
+  echo "end initDockerfile"
 }
 
 initJenkinsfile() {
+  echo "begin initJenkinsfile"
+
   mkdir devops
   cp devops.template/Jenkinsfile.* devops/
   sed -i "" "s/template_repo_name/${REPO_NAME}/g" devops/Jenkinsfile.release
+
+  echo "end initJenkinsfile"
 }
 
 createCIInitBranch() {
+  echo "begin createCIInitBranch"
+
   git clone https://github.com/${REPO_ACCOUNT}/${REPO_NAME}.git
   cd ${REPO_NAME}
   git checkout -b ci_init
@@ -71,15 +85,25 @@ createCIInitBranch() {
   git commit -m 'auto init ci config'
   git push origin ci_init:ci_init
   cd ..
+
+  echo "end createCIInitBranch"
 }
 
 createJob() {
+  echo "begin createJob"
+
   # TODO：使用真实ci的url, auth信息
-  curl -X POST https://ci.intra.longguikeji.com/createItem?name=${REPO_NAME}.$1 \
-    --data-binary "@config.xml" -H "Content-Type: text/xml" -u admin:\$aVbd18\&D2
+  # curl -X POST https://ci.intra.longguikeji.com/createItem?name=${REPO_NAME}.$1 \
+  #   --data-binary "@config.xml" -H "Content-Type: text/xml" -u admin:\$aVbd18\&D2
+  curl -X POST http://localhost:8005/createItem?name=${REPO_NAME}.$1 \
+  --data-binary "@config.xml" -H "Content-Type: text/xml" -u admin:admin
+
+  echo "end createJob"
 }
 
 createJenkinsJobs() {
+  echo "begin createJenkinsJobs"
+
   sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
   -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
   -e "s/template_repo_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}.git/" \
@@ -106,9 +130,13 @@ createJenkinsJobs() {
   devops.template/config.release.xml > config.xml
 
   createJob release
+
+  echo "end createJenkinsJobs"
 }
 
 initRepoSettings() {
+  echo "begin initRepoSettings"
+
   # TODO：使用真实auth信息
   # set master branch rules
   curl -H "Content-type: application/json" -H "Accept: application/vnd.github.luke-cage-preview+json"\
@@ -142,13 +170,15 @@ initRepoSettings() {
       "pull_request"
     ],
     "config": {
-      "url": "https://example.com/webhook",
+      "url": "https://ci.intra.longguikeji.com/github-webhook",
       "content_type": "json",
       "insecure_ssl": "0"
     }
   }' \
   -X POST https://api.github.com/repos/${REPO_ACCOUNT}/${REPO_NAME}/hooks \
   -u sanguomao:Machao19860203
+
+  echo "end initRepoSettings"
 }
 
 cleanup() {
