@@ -1,6 +1,7 @@
+# python项目的基本Dockerfile模版，主要包含test，lint，build相关检查，项目需要根据自身情况修改该模版
 FROM python:3.6 as build_deps
 EXPOSE 80
-WORKDIR /var/oneid
+WORKDIR /workspace
 ADD requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -23,7 +24,4 @@ RUN apt-get update \
     && pip install uwsgi
 ADD . .
 COPY uwsgi.ini /etc/uwsgi/uwsgi.ini
-RUN \
-    python manage.py compilemessages && \
-    sed -i "s|LANGUAGE_CODE = 'zh-hans'|LANGUAGE_CODE = 'zh_hans'|g" oneid/settings.py
 CMD python manage.py migrate && supervisord

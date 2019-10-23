@@ -6,6 +6,7 @@ readonly REPO_NAME=$1
 readonly REPO_TYPE=$2
 
 # TODO: 使用实际值，或者使用命令行参数
+# readonly REPO_ACCOUNT="rockl2e"
 readonly REPO_ACCOUNT="sanguomao"
 readonly JENKINS_CREDENTIALSID="devops-longguikeji-github-token"
 
@@ -22,7 +23,7 @@ help() {
 }
 
 err() {
-  echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')]: $@" >&2
+  echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')]: $@" > &2
   help
 }
 
@@ -74,8 +75,8 @@ createCIInitBranch() {
 
 createJob() {
   # TODO：使用真实ci的url, auth信息
-  curl -X POST http://localhost:8005/createItem?name=${REPO_NAME}.$1 \
-    --data-binary "@config.xml" -H "Content-Type: text/xml" -u admin:admin
+  curl -X POST https://ci.intra.longguikeji.com/createItem?name=${REPO_NAME}.$1 \
+    --data-binary "@config.xml" -H "Content-Type: text/xml" -u admin:\$aVbd18\&D2
 }
 
 createJenkinsJobs() {
@@ -107,6 +108,49 @@ createJenkinsJobs() {
   createJob release
 }
 
+initRepoSettings() {
+  # TODO：使用真实auth信息
+  # set master branch rules
+  curl -H "Content-type: application/json" -H "Accept: application/vnd.github.luke-cage-preview+json"\
+  -d \
+  '{
+    "required_status_checks": {
+      "strict": true,
+      "contexts": [
+        "continuous-integration/travis-ci"
+      ]
+    },
+    "enforce_admins": false,
+    "required_pull_request_reviews": {
+      "dismiss_stale_reviews": true,
+      "require_code_owner_reviews": false,
+      "required_approving_review_count": 1
+    },
+    "restrictions": null
+  }' \
+  -X PUT https://api.github.com/repos/${REPO_ACCOUNT}/${REPO_NAME}/branches/master/protection \
+  -u sanguomao:Machao19860203
+
+  # set repo webhooks
+  curl -H "Content-type: application/json" \
+  -d \
+  '{
+    "name": "web",
+    "active": true,
+    "events": [
+      "push",
+      "pull_request"
+    ],
+    "config": {
+      "url": "https://example.com/webhook",
+      "content_type": "json",
+      "insecure_ssl": "0"
+    }
+  }' \
+  -X POST https://api.github.com/repos/${REPO_ACCOUNT}/${REPO_NAME}/hooks \
+  -u sanguomao:Machao19860203
+}
+
 cleanup() {
   rm -f Dockerfile
   rm -rf devops/
@@ -125,6 +169,7 @@ initDockerfile
 initJenkinsfile
 createCIInitBranch
 createJenkinsJobs
+initRepoSettings
 cleanup
 
 
