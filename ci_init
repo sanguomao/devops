@@ -96,7 +96,7 @@ createJob() {
   # curl -X POST https://ci.intra.longguikeji.com/createItem?name=${REPO_NAME}.$1 \
   #   --data-binary "@config.xml" -H "Content-Type: text/xml" -u admin:\$aVbd18\&D2
   curl -X POST http://localhost:8005/createItem?name=${REPO_NAME}.$1 \
-  --data-binary "@config.xml" -H "Content-Type: text/xml" -u admin:admin
+  --data-binary "@config.xml" -H "Content-Type: text/xml" -u admin
 
   echo "end createJob"
 }
@@ -157,7 +157,7 @@ initRepoSettings() {
     "restrictions": null
   }' \
   -X PUT https://api.github.com/repos/${REPO_ACCOUNT}/${REPO_NAME}/branches/master/protection \
-  -u sanguomao:Machao19860203
+  -u sanguomao
 
   # set repo webhooks
   curl -H "Content-type: application/json" \
@@ -176,7 +176,7 @@ initRepoSettings() {
     }
   }' \
   -X POST https://api.github.com/repos/${REPO_ACCOUNT}/${REPO_NAME}/hooks \
-  -u sanguomao:Machao19860203
+  -u sanguomao
 
   echo "end initRepoSettings"
 }
