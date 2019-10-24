@@ -100,9 +100,19 @@ createJob() {
   #   --data-binary "@config.xml" -H "Content-Type: text/xml" -u admin
   # using a crumb token when "Prevent Cross Site Request Forgery exploits" security option is enabled
   crumb=$(curl -s 'http://localhost:8080/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)' -u "${user}")
-  curl -X POST -H "${crumb}" http://localhost:8080/createItem?name=${REPO_NAME}.$1 \
-  --data-binary "@config.xml" -H "Content-Type: text/xml" -u "${user}"
-
+  crumb_status=$(echo $CRUMB | grep -c 'Jenkins-Crumb')
+  if [[ ${crumb_status} == 0 ]]; then
+    echo "createJob get crumb failed"
+    echo ${crumb}
+    exit -1
+  fi
+  create_status=$(curl -X POST -H "${crumb}" http://localhost:8080/createItem?name=${REPO_NAME}.$1 \
+  --data-binary "@config.xml" -H "Content-Type: text/xml" -u "${user}")
+  if [[ -n ${create_status} ]]; then
+    echo "createJob create failed"
+    echo ${create_status}
+    exit -1
+  fi
   echo "end createJob"
 }
 
@@ -118,23 +128,23 @@ createJenkinsJobs() {
 
   createJob status
 
-  # sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
-  # -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
-  # -e "s/template_repo_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}.git/" \
-  # -e "s/template_branch_name/master/" \
-  # -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.build/" \
-  # devops.template/config.xml > config.xml
+  sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
+  -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
+  -e "s/template_repo_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}.git/" \
+  -e "s/template_branch_name/master/" \
+  -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.build/" \
+  devops.template/config.xml > config.xml
 
-  # createJob build
+  createJob build
 
-  # sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
-  # -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
-  # -e "s/template_repo_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}.git/" \
-  # -e "s/template_branch_name/master/" \
-  # -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.release/" \
-  # devops.template/config.release.xml > config.xml
+  sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
+  -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
+  -e "s/template_repo_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}.git/" \
+  -e "s/template_branch_name/master/" \
+  -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.release/" \
+  devops.template/config.release.xml > config.xml
 
-  # createJob release
+  createJob release
 
   echo "end createJenkinsJobs"
 }
@@ -199,13 +209,13 @@ if [[ $# < 2 ]]; then
   exit -1
 fi
 
-# initMakefile
-# initDockerfile
-# initJenkinsfile
-# createCIInitBranch
+initMakefile
+initDockerfile
+initJenkinsfile
+createCIInitBranch
 createJenkinsJobs
-# initRepoSettings
-# cleanup
+initRepoSettings
+cleanup
 
 
 
