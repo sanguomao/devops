@@ -43,11 +43,12 @@ initMakefile() {
 
   sed "s/template_repo_name/${REPO_NAME}/g" devops.template/Makefile > Makefile
   if [ ${REPO_TYPE} == 'ts' ]; then
-    sed -i "" "s/lint-template/npx lint-staged/" Makefile
-    sed -i "" "s/test-template/npm run test:unit/" Makefile
+    sed -e "s/lint-template/npx lint-staged/" -e "s/test-template/npm run test:unit/" Makefile > Makefile.bak
+    mv Makefile.bak Makefile
   elif [ ${REPO_TYPE} == 'python' ]; then
-    sed -i "" "s/lint-template/.git\/hooks\/pre-commit/" Makefile
-    sed -i "" "s/test-template/python manage.py migrate \&\& python manage.py test siteapi.v1.tests/" Makefile
+    sed -e "s/lint-template/.git\/hooks\/pre-commit/" \
+    -e "s/test-template/python manage.py migrate \&\& python manage.py test siteapi.v1.tests/" Makefile > Makefile.bak
+    mv Makefile.bak Makefile
   else
     err "Repo type not supported. Please use ts or python."
     cleanup
@@ -61,7 +62,7 @@ initDockerfile() {
   echo "begin initDockerfile"
 
   if [ ${REPO_TYPE} == 'ts' ]; then
-    cp devops.template/Dockerfile.ts Dockerfile
+    cp devops.template/Dockerfile.typescript Dockerfile
   elif [ ${REPO_TYPE} == 'python' ]; then
     cp devops.template/Dockerfile.python Dockerfile
   else
@@ -78,7 +79,8 @@ initJenkinsfile() {
 
   mkdir devops
   cp devops.template/Jenkinsfile.* devops/
-  sed -i "" "s/template_repo_name/${REPO_NAME}/g" devops/Jenkinsfile.release
+  sed "s/template_repo_name/${REPO_NAME}/g" devops/Jenkinsfile.release > devops/Jenkinsfile.release.bak
+  mv devops/Jenkinsfile.release.bak devops/Jenkinsfile.release
 
   echo "end initJenkinsfile"
 }
