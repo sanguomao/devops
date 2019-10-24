@@ -2,13 +2,16 @@
 #
 # Init repo's ci configuration with template, include Makefile, Dockfile and Jenkinsfile in devops directory
 
-readonly REPO_NAME=$1
+readonly REPO_NAME=$(echo $1 |awk -F '/' '{print $1}')
+readonly REPO_ACCOUNT=$(echo $1 |awk -F '/' '{print $2}')
 readonly REPO_TYPE=$2
-
-# TODO: 使用实际值，或者使用命令行参数
-# readonly REPO_ACCOUNT="rockl2e"
-readonly REPO_ACCOUNT="sanguomao"
 readonly JENKINS_CREDENTIALSID="devops-longguikeji-github-token"
+readonly JENKINS_DEVOPS_ACCOUNT="admin"
+readonly JENKINS_PASSWORD=$3
+# TODO：使用真实ci的url
+readonly GITHUB_DEVOPS_ACCOUNT="sanguomao"
+# readonly GITHUB_DEVOPS_ACCOUNT="devops-longguikeji"
+readonly GITHUB_PASSWORD=$3
 
 help() {
   echo """
@@ -18,7 +21,7 @@ help() {
       Repo URL: https://github.com/rockl2e/devops.git
       Repo type: ts or python
       Run command below to init ci configure:
-      ./ci_init devops python
+      ./ci_init rockl2e/devops python
   """
 }
 
@@ -91,12 +94,15 @@ createCIInitBranch() {
 
 createJob() {
   echo "begin createJob"
-
-  # TODO：使用真实ci的url, auth信息
+  # [[ -z ${JENKINS_PASSWORD} ]] && user=${JENKINS_DEVOPS_ACCOUNT} || user="${JENKINS_DEVOPS_ACCOUNT}:${JENKINS_PASSWORD}"
+  # TODO：使用真实ci的url
   # curl -X POST https://ci.intra.longguikeji.com/createItem?name=${REPO_NAME}.$1 \
   #   --data-binary "@config.xml" -H "Content-Type: text/xml" -u admin
+
+  # curl -X POST http://localhost:8005/createItem?name=${REPO_NAME}.$1 \
+  # --data-binary "@config.xml" -H "Content-Type: text/xml" -u "${user}"
   curl -X POST http://localhost:8005/createItem?name=${REPO_NAME}.$1 \
-  --data-binary "@config.xml" -H "Content-Type: text/xml" -u admin
+  --data-binary "@config.xml" -H "Content-Type: text/xml"
 
   echo "end createJob"
 }
@@ -137,7 +143,7 @@ createJenkinsJobs() {
 initRepoSettings() {
   echo "begin initRepoSettings"
 
-  # TODO：使用真实auth信息
+  [[ -z ${GITHUB_PASSWORD} ]] && user="${GITHUB_DEVOPS_ACCOUNT}" || user="${GITHUB_DEVOPS_ACCOUNT}:${GITHUB_PASSWORD}"
   # set master branch rules
   curl -H "Content-type: application/json" -H "Accept: application/vnd.github.luke-cage-preview+json"\
   -d \
@@ -145,7 +151,7 @@ initRepoSettings() {
     "required_status_checks": {
       "strict": true,
       "contexts": [
-        "continuous-integration/travis-ci"
+        "jenkins-config.status"
       ]
     },
     "enforce_admins": false,
@@ -157,7 +163,7 @@ initRepoSettings() {
     "restrictions": null
   }' \
   -X PUT https://api.github.com/repos/${REPO_ACCOUNT}/${REPO_NAME}/branches/master/protection \
-  -u ${REPO_ACCOUNT}
+  -u "${user}"
 
   # set repo webhooks
   curl -H "Content-type: application/json" \
@@ -176,7 +182,7 @@ initRepoSettings() {
     }
   }' \
   -X POST https://api.github.com/repos/${REPO_ACCOUNT}/${REPO_NAME}/hooks \
-  -u ${REPO_ACCOUNT}
+  -u "${user}"
 
   echo "end initRepoSettings"
 }
@@ -194,13 +200,13 @@ if [[ $# < 2 ]]; then
   exit -1
 fi
 
-initMakefile
-initDockerfile
-initJenkinsfile
-createCIInitBranch
+# initMakefile
+# initDockerfile
+# initJenkinsfile
+# createCIInitBranch
 createJenkinsJobs
-initRepoSettings
-cleanup
+# initRepoSettings
+# cleanup
 
 
 
