@@ -8,9 +8,7 @@ readonly REPO_TYPE=$2
 readonly JENKINS_CREDENTIALSID="devops-longguikeji-github-token"
 readonly JENKINS_DEVOPS_ACCOUNT="admin"
 readonly JENKINS_CREDENCIAL=$3
-# TODO：使用真实ci的url
-readonly GITHUB_DEVOPS_ACCOUNT="sanguomao"
-# readonly GITHUB_DEVOPS_ACCOUNT="devops-longguikeji"
+readonly GITHUB_DEVOPS_ACCOUNT="devops-longguikeji"
 readonly GITHUB_CREDENCIAL=$4
 
 help() {
@@ -109,7 +107,7 @@ createCIInitBranch() {
 createJob() {
   echo "begin createJob"
 
-  create_status=$(curl -s -X POST -H "$2" http://localhost:8080/createItem?name=${REPO_NAME}.$1 \
+  create_status=$(curl -s -X POST -H "$2" http://ci.intra.longguikeji.com/createItem?name=${REPO_NAME}.$1 \
   --data-binary "@config.xml" -H "Content-Type: text/xml" -u "$3")
   if [[ -n ${create_status} ]]; then
     err "CreateJob create failed. Detail: ${create_status}"
@@ -123,11 +121,9 @@ createJenkinsJobs() {
   echo "begin createJenkinsJobs"
 
   [[ -z ${JENKINS_CREDENCIAL} ]] && user=${JENKINS_DEVOPS_ACCOUNT} || user=${JENKINS_CREDENCIAL}
-  # TODO：使用真实ci的url
-  # curl -X POST https://ci.intra.longguikeji.com/createItem?name=${REPO_NAME}.$1 \
-  #   --data-binary "@config.xml" -H "Content-Type: text/xml" -u admin
+
   # using a crumb token when "Prevent Cross Site Request Forgery exploits" security option is enabled
-  crumb=$(curl -s 'http://localhost:8080/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)' -u "${user}")
+  crumb=$(curl -s 'http://ci.intra.longguikeji.com/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)' -u "${user}")
   crumb_status=$(echo ${crumb} | grep -c 'Jenkins-Crumb')
   if [[ ${crumb_status} == 0 ]]; then
     err "CreateJob get crumb failed. Detail: ${crumb}"
