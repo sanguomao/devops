@@ -101,7 +101,7 @@ createJob() {
 
   # curl -X POST http://localhost:8005/createItem?name=${REPO_NAME}.$1 \
   # --data-binary "@config.xml" -H "Content-Type: text/xml" -u "${user}"
-  curl -X POST http://localhost:8005/createItem?name=${REPO_NAME}.$1 \
+  curl -X POST http://localhost:8080/createItem?name=${REPO_NAME}.$1 \
   --data-binary "@config.xml" -H "Content-Type: text/xml"
 
   echo "end createJob"
