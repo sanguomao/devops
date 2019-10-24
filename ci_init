@@ -96,7 +96,11 @@ createCIInitBranch() {
   cp ../Makefile .
   git add .
   git commit -m 'auto init ci config'
-  git push origin ci_init:ci_init
+  if [[ -z ${GITHUB_CREDENCIAL} ]]; then
+    git push origin ci_init:ci_init
+  elif
+    git push https://${GITHUB_CREDENCIAL}@github.com/${REPO_ACCOUNT}/${REPO_NAME}.git
+  fi
   cd ..
 
   echo "end createCIInitBranch"
