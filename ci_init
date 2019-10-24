@@ -7,11 +7,11 @@ readonly REPO_ACCOUNT=$(echo $1 |awk -F '/' '{print $2}')
 readonly REPO_TYPE=$2
 readonly JENKINS_CREDENTIALSID="devops-longguikeji-github-token"
 readonly JENKINS_DEVOPS_ACCOUNT="admin"
-readonly JENKINS_PASSWORD=$3
+readonly JENKINS_CREDENCIAL=$3
 # TODO：使用真实ci的url
 readonly GITHUB_DEVOPS_ACCOUNT="sanguomao"
 # readonly GITHUB_DEVOPS_ACCOUNT="devops-longguikeji"
-readonly GITHUB_PASSWORD=$3
+readonly GITHUB_CREDENCIAL=$4
 
 help() {
   echo """
@@ -94,15 +94,14 @@ createCIInitBranch() {
 
 createJob() {
   echo "begin createJob"
-  # [[ -z ${JENKINS_PASSWORD} ]] && user=${JENKINS_DEVOPS_ACCOUNT} || user="${JENKINS_DEVOPS_ACCOUNT}:${JENKINS_PASSWORD}"
+  [[ -z ${JENKINS_CREDENCIAL} ]] && user=${JENKINS_DEVOPS_ACCOUNT} || user=${JENKINS_CREDENCIAL}
   # TODO：使用真实ci的url
   # curl -X POST https://ci.intra.longguikeji.com/createItem?name=${REPO_NAME}.$1 \
   #   --data-binary "@config.xml" -H "Content-Type: text/xml" -u admin
-
-  # curl -X POST http://localhost:8005/createItem?name=${REPO_NAME}.$1 \
-  # --data-binary "@config.xml" -H "Content-Type: text/xml" -u "${user}"
-  curl -X POST http://localhost:8080/createItem?name=${REPO_NAME}.$1 \
-  --data-binary "@config.xml" -H "Content-Type: text/xml"
+  # using a crumb token when "Prevent Cross Site Request Forgery exploits" security option is enabled
+  crumb=$(curl -s 'http://localhost:8080/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)' -u "${user}")
+  curl -X POST -H "${crumb}" http://localhost:8080/createItem?name=${REPO_NAME}.$1 \
+  --data-binary "@config.xml" -H "Content-Type: text/xml" -u "${user}"
 
   echo "end createJob"
 }
@@ -119,23 +118,23 @@ createJenkinsJobs() {
 
   createJob status
 
-  sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
-  -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
-  -e "s/template_repo_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}.git/" \
-  -e "s/template_branch_name/master/" \
-  -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.build/" \
-  devops.template/config.xml > config.xml
+  # sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
+  # -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
+  # -e "s/template_repo_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}.git/" \
+  # -e "s/template_branch_name/master/" \
+  # -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.build/" \
+  # devops.template/config.xml > config.xml
 
-  createJob build
+  # createJob build
 
-  sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
-  -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
-  -e "s/template_repo_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}.git/" \
-  -e "s/template_branch_name/master/" \
-  -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.release/" \
-  devops.template/config.release.xml > config.xml
+  # sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
+  # -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
+  # -e "s/template_repo_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}.git/" \
+  # -e "s/template_branch_name/master/" \
+  # -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.release/" \
+  # devops.template/config.release.xml > config.xml
 
-  createJob release
+  # createJob release
 
   echo "end createJenkinsJobs"
 }
