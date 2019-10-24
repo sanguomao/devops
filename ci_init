@@ -2,8 +2,8 @@
 #
 # Init repo's ci configuration with template, include Makefile, Dockfile and Jenkinsfile in devops directory
 
-readonly REPO_NAME=$(echo $1 |awk -F '/' '{print $1}')
-readonly REPO_ACCOUNT=$(echo $1 |awk -F '/' '{print $2}')
+readonly REPO_ACCOUNT=$(echo $1 |awk -F '/' '{print $1}')
+readonly REPO_NAME=$(echo $1 |awk -F '/' '{print $2}')
 readonly REPO_TYPE=$2
 readonly JENKINS_CREDENTIALSID="devops-longguikeji-github-token"
 readonly JENKINS_DEVOPS_ACCOUNT="admin"
@@ -18,16 +18,24 @@ help() {
   Script execute failed.
   Usage:
   For example:
-      Repo URL: https://github.com/rockl2e/devops.git
+      Repo URL: https://github.com/longguikeji/arkid-core.git
       Repo type: ts or python
       Run command below to init ci configure:
-      ./ci_init rockl2e/devops python
+      ./ci_init longguikeji/arkid-core python
   """
 }
 
 err() {
   echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')]: $@" >&2
   help
+}
+
+cleanup() {
+  rm -f Dockerfile
+  rm -rf devops/
+  rm -f Makefile
+  rm -rf ${REPO_NAME}
+  rm -f config.xml
 }
 
 initMakefile() {
@@ -94,23 +102,12 @@ createCIInitBranch() {
 
 createJob() {
   echo "begin createJob"
-  [[ -z ${JENKINS_CREDENCIAL} ]] && user=${JENKINS_DEVOPS_ACCOUNT} || user=${JENKINS_CREDENCIAL}
-  # TODO：使用真实ci的url
-  # curl -X POST https://ci.intra.longguikeji.com/createItem?name=${REPO_NAME}.$1 \
-  #   --data-binary "@config.xml" -H "Content-Type: text/xml" -u admin
-  # using a crumb token when "Prevent Cross Site Request Forgery exploits" security option is enabled
-  crumb=$(curl -s 'http://localhost:8080/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)' -u "${user}")
-  crumb_status=$(echo $CRUMB | grep -c 'Jenkins-Crumb')
-  if [[ ${crumb_status} == 0 ]]; then
-    echo "createJob get crumb failed"
-    echo ${crumb}
-    exit -1
-  fi
-  create_status=$(curl -X POST -H "${crumb}" http://localhost:8080/createItem?name=${REPO_NAME}.$1 \
-  --data-binary "@config.xml" -H "Content-Type: text/xml" -u "${user}")
+
+  create_status=$(curl -s -X POST -H "$2" http://localhost:8080/createItem?name=${REPO_NAME}.$1 \
+  --data-binary "@config.xml" -H "Content-Type: text/xml" -u "$3")
   if [[ -n ${create_status} ]]; then
-    echo "createJob create failed"
-    echo ${create_status}
+    err "CreateJob create failed. Detail: ${create_status}"
+    cleanup
     exit -1
   fi
   echo "end createJob"
@@ -119,6 +116,19 @@ createJob() {
 createJenkinsJobs() {
   echo "begin createJenkinsJobs"
 
+  [[ -z ${JENKINS_CREDENCIAL} ]] && user=${JENKINS_DEVOPS_ACCOUNT} || user=${JENKINS_CREDENCIAL}
+  # TODO：使用真实ci的url
+  # curl -X POST https://ci.intra.longguikeji.com/createItem?name=${REPO_NAME}.$1 \
+  #   --data-binary "@config.xml" -H "Content-Type: text/xml" -u admin
+  # using a crumb token when "Prevent Cross Site Request Forgery exploits" security option is enabled
+  crumb=$(curl -s 'http://localhost:8080/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)' -u "${user}")
+  crumb_status=$(echo ${crumb} | grep -c 'Jenkins-Crumb')
+  if [[ ${crumb_status} == 0 ]]; then
+    err "CreateJob get crumb failed. Detail: ${crumb}"
+    cleanup
+    exit -1
+  fi
+
   sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
   -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
   -e "s/template_repo_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}.git/" \
@@ -126,7 +136,7 @@ createJenkinsJobs() {
   -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.status/" \
   devops.template/config.xml > config.xml
 
-  createJob status
+  createJob status ${crumb} ${user}
 
   sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
   -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
@@ -135,7 +145,7 @@ createJenkinsJobs() {
   -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.build/" \
   devops.template/config.xml > config.xml
 
-  createJob build
+  createJob build ${crumb} ${user}
 
   sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
   -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
@@ -144,7 +154,7 @@ createJenkinsJobs() {
   -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.release/" \
   devops.template/config.release.xml > config.xml
 
-  createJob release
+  createJob release ${crumb} ${user}
 
   echo "end createJenkinsJobs"
 }
@@ -152,7 +162,7 @@ createJenkinsJobs() {
 initRepoSettings() {
   echo "begin initRepoSettings"
 
-  [[ -z ${GITHUB_PASSWORD} ]] && user="${GITHUB_DEVOPS_ACCOUNT}" || user="${GITHUB_DEVOPS_ACCOUNT}:${GITHUB_PASSWORD}"
+  [[ -z ${GITHUB_CREDENCIAL} ]] && user="${GITHUB_DEVOPS_ACCOUNT}" || user="${GITHUB_CREDENCIAL}"
   # set master branch rules
   curl -H "Content-type: application/json" -H "Accept: application/vnd.github.luke-cage-preview+json"\
   -d \
@@ -160,7 +170,7 @@ initRepoSettings() {
     "required_status_checks": {
       "strict": true,
       "contexts": [
-        "jenkins-config.status"
+        "'"${REPO_NAME}.status"'"
       ]
     },
     "enforce_admins": false,
@@ -196,24 +206,21 @@ initRepoSettings() {
   echo "end initRepoSettings"
 }
 
-cleanup() {
-  rm -f Dockerfile
-  rm -rf devops/
-  rm -f Makefile
-  rm -rf ${REPO_NAME}
-  rm -f config.xml
-}
-
 if [[ $# < 2 ]]; then
   err "Params number invalid."
   exit -1
 fi
 
+if [[ -z ${REPO_NAME} ]]; then
+  err "Repo url invalid."
+  exit -1
+fi
+
 initMakefile
 initDockerfile
+createJenkinsJobs
 initJenkinsfile
 createCIInitBranch
-createJenkinsJobs
 initRepoSettings
 cleanup
 
