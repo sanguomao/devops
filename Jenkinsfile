@@ -11,25 +11,25 @@ pipeline {
   }
 
   stages {
-        stage('pre') {
-            steps{
-                sendDingTalk("pending", "开始构建")
-            }
-        }
-        stage("init repo ci configure") {
-            steps {
-                sh "./ci_init ${REPO_URL} ${REPO_TYPE} ${GITHUB_ACCOUNT_PWD}"
-            }
-        }
-    }
-    post {
-        success {
-            sendDingTalk("success", "构建成功")
-        }
-        failure {
-            sendDingTalk("failure", "构建失败")
-        }
-    }
+      stage('pre') {
+          steps{
+              sendDingTalk("pending", "开始构建")
+          }
+      }
+      stage("init repo ci configure") {
+          steps {
+              sh "./ci_init ${REPO_URL} ${REPO_TYPE} ${GITHUB_ACCOUNT_PSW}"
+          }
+      }
+  }
+  post {
+      success {
+          sendDingTalk("success", "构建成功")
+      }
+      failure {
+          sendDingTalk("failure", "构建失败")
+      }
+  }
 }
 
 def sendDingTalk(status, message) {
