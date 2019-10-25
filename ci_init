@@ -19,8 +19,7 @@ help() {
       Repo URL: https://github.com/longguikeji/arkid-core.git
       Repo type: ts or python
       Run command below to init ci configure:
-    Jenkinsfile:
-      ./ci_init longguikeji/arkid-core python github_credential github_settings_token jenkins_credential
+        ./ci_init longguikeji/arkid-core python github_credential github_settings_token jenkins_credential
   """
 }
 
@@ -104,8 +103,7 @@ createCIInitBranch() {
 createJob() {
   echo "begin createJob"
 
-  # create_status=$(curl -s -X POST -H "$2" http://ci.intra.longguikeji.com/createItem?name=${REPO_NAME}.$1 \
-  create_status=$(curl -s -X POST -H "$2" http://localhost:8080/createItem?name=${REPO_NAME}.$1 \
+  create_status=$(curl -s -X POST -H "$2" http://ci.intra.longguikeji.com/createItem?name=${REPO_NAME}.$1 \
   --data-binary "@config.xml" -H "Content-Type: text/xml" -u "${JENKINS_CREDENCIAL}")
   if [[ -n ${create_status} ]]; then
     err "CreateJob create failed. Detail: ${create_status}"
@@ -119,8 +117,7 @@ createJenkinsJobs() {
   echo "begin createJenkinsJobs"
 
   # using a crumb token when "Prevent Cross Site Request Forgery exploits" security option is enabled
-  # crumb=$(curl -s 'http://ci.intra.longguikeji.com/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)' -u "${JENKINS_CREDENCIAL}")
-  crumb=$(curl -s 'http://localhost:8080/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)' -u "${JENKINS_CREDENCIAL}")
+  crumb=$(curl -s 'http://ci.intra.longguikeji.com/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)' -u "${JENKINS_CREDENCIAL}")
   crumb_status=$(echo ${crumb} | grep -c 'Jenkins-Crumb')
   if [[ ${crumb_status} == 0 ]]; then
     err "CreateJob get crumb failed. Detail: ${crumb}"
