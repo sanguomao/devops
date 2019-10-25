@@ -7,9 +7,9 @@ readonly REPO_NAME=$(echo $1 |awk -F '/' '{print $2}')
 readonly REPO_TYPE=$2
 readonly JENKINS_CREDENTIALSID="devops-longguikeji-github-token"
 readonly JENKINS_DEVOPS_ACCOUNT="admin"
-readonly JENKINS_CREDENCIAL=$3
-readonly GITHUB_DEVOPS_ACCOUNT="devops-longguikeji"
-readonly GITHUB_CREDENCIAL=$4
+readonly GITHUB_CREDENCIAL=$3
+readonly GITHUB_SETTINGS_TOKEN=$4
+readonly JENKINS_CREDENCIAL=$5
 
 help() {
   echo """
@@ -19,7 +19,8 @@ help() {
       Repo URL: https://github.com/longguikeji/arkid-core.git
       Repo type: ts or python
       Run command below to init ci configure:
-      ./ci_init longguikeji/arkid-core python
+    Jenkinsfile:
+      ./ci_init longguikeji/arkid-core python github_credential github_settings_token jenkins_credential
   """
 }
 
@@ -94,11 +95,7 @@ createCIInitBranch() {
   cp ../Makefile .
   git add .
   git commit -m 'auto init ci config'
-  if [[ -z ${GITHUB_CREDENCIAL} ]]; then
-    git push origin ci_init:ci_init
-  else
-    git push https://${GITHUB_CREDENCIAL}@github.com/${REPO_ACCOUNT}/${REPO_NAME}.git ci_init:ci_init
-  fi
+  git push https://${GITHUB_CREDENCIAL}@github.com/${REPO_ACCOUNT}/${REPO_NAME}.git ci_init:ci_init
   cd ..
 
   echo "end createCIInitBranch"
@@ -107,8 +104,9 @@ createCIInitBranch() {
 createJob() {
   echo "begin createJob"
 
-  create_status=$(curl -s -X POST -H "$2" http://ci.intra.longguikeji.com/createItem?name=${REPO_NAME}.$1 \
-  --data-binary "@config.xml" -H "Content-Type: text/xml" -u "$3")
+  # create_status=$(curl -s -X POST -H "$2" http://ci.intra.longguikeji.com/createItem?name=${REPO_NAME}.$1 \
+  create_status=$(curl -s -X POST -H "$2" http://localhost:8080/createItem?name=${REPO_NAME}.$1 \
+  --data-binary "@config.xml" -H "Content-Type: text/xml" -u "${JENKINS_CREDENCIAL}")
   if [[ -n ${create_status} ]]; then
     err "CreateJob create failed. Detail: ${create_status}"
     cleanup
@@ -120,10 +118,9 @@ createJob() {
 createJenkinsJobs() {
   echo "begin createJenkinsJobs"
 
-  [[ -z ${JENKINS_CREDENCIAL} ]] && user=${JENKINS_DEVOPS_ACCOUNT} || user=${JENKINS_CREDENCIAL}
-
   # using a crumb token when "Prevent Cross Site Request Forgery exploits" security option is enabled
-  crumb=$(curl -s 'http://ci.intra.longguikeji.com/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)' -u "${user}")
+  # crumb=$(curl -s 'http://ci.intra.longguikeji.com/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)' -u "${JENKINS_CREDENCIAL}")
+  crumb=$(curl -s 'http://localhost:8080/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)' -u "${JENKINS_CREDENCIAL}")
   crumb_status=$(echo ${crumb} | grep -c 'Jenkins-Crumb')
   if [[ ${crumb_status} == 0 ]]; then
     err "CreateJob get crumb failed. Detail: ${crumb}"
@@ -138,7 +135,7 @@ createJenkinsJobs() {
   -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.status/" \
   devops.template/config.xml > config.xml
 
-  createJob status ${crumb} ${user}
+  createJob status ${crumb}
 
   sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
   -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
@@ -147,7 +144,7 @@ createJenkinsJobs() {
   -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.build/" \
   devops.template/config.xml > config.xml
 
-  createJob build ${crumb} ${user}
+  createJob build ${crumb}
 
   sed -e "s/template_project_url/https:\/\/github.com\/${REPO_ACCOUNT}\/${REPO_NAME}\//" \
   -e "s/template_credentials_id/${JENKINS_CREDENTIALSID}/" \
@@ -156,7 +153,7 @@ createJenkinsJobs() {
   -e "s/template_jenkinsfile_path/devops\/Jenkinsfile.release/" \
   devops.template/config.release.xml > config.xml
 
-  createJob release ${crumb} ${user}
+  createJob release ${crumb}
 
   echo "end createJenkinsJobs"
 }
@@ -164,11 +161,7 @@ createJenkinsJobs() {
 initRepoSettings() {
   echo "begin initRepoSettings"
 
-  [[ -z ${GITHUB_CREDENCIAL} ]] && user="${GITHUB_DEVOPS_ACCOUNT}" || user="${GITHUB_CREDENCIAL}"
-  # set master branch rules
-  curl -H "Content-type: application/json" -H "Accept: application/vnd.github.luke-cage-preview+json"\
-  -d \
-  '{
+  branch_settings='{
     "required_status_checks": {
       "strict": true,
       "contexts": [
@@ -182,14 +175,8 @@ initRepoSettings() {
       "required_approving_review_count": 1
     },
     "restrictions": null
-  }' \
-  -X PUT https://api.github.com/repos/${REPO_ACCOUNT}/${REPO_NAME}/branches/master/protection \
-  -u "${user}"
-
-  # set repo webhooks
-  curl -H "Content-type: application/json" \
-  -d \
-  '{
+  }'
+  hook_settings='{
     "name": "web",
     "active": true,
     "events": [
@@ -201,14 +188,24 @@ initRepoSettings() {
       "content_type": "json",
       "insecure_ssl": "0"
     }
-  }' \
-  -X POST https://api.github.com/repos/${REPO_ACCOUNT}/${REPO_NAME}/hooks \
-  -u "${user}"
+  }'
+
+  # set master branch rules
+  curl -H "Content-type: application/json" -H "Accept: application/vnd.github.luke-cage-preview+json" \
+  -H "Authorization: token ${GITHUB_SETTINGS_TOKEN}" \
+  -d "${branch_settings}" \
+  -X PUT https://api.github.com/repos/${REPO_ACCOUNT}/${REPO_NAME}/branches/master/protection
+
+  # set repo webhooks
+  curl -H "Content-type: application/json" \
+  -H "Authorization: token ${GITHUB_SETTINGS_TOKEN}" \
+  -d "${hook_settings}" \
+  -X POST https://api.github.com/repos/${REPO_ACCOUNT}/${REPO_NAME}/hooks
 
   echo "end initRepoSettings"
 }
 
-if [[ $# < 2 ]]; then
+if [[ $# < 5 ]]; then
   err "Params number invalid."
   exit -1
 fi

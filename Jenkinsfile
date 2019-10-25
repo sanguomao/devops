@@ -8,6 +8,7 @@ pipeline {
 
   environment {
       GITHUB_CREDENCIAL = credentials('devops-longguikeji github account')
+      GITHUB_SETTINGS_TOKEN = credentials('github-settings-token')
       JENKINS_CREDENCIAL = credentials('jenkins-admin-credential')
   }
 
@@ -19,7 +20,7 @@ pipeline {
       }
       stage("init repo ci configure") {
           steps {
-              sh "./ci_init ${REPO_URL} ${REPO_TYPE} ${JENKINS_CREDENCIAL} ${GITHUB_CREDENCIAL}"
+              sh "./ci_init ${REPO_URL} ${REPO_TYPE} ${GITHUB_CREDENCIAL} ${GITHUB_SETTINGS_TOKEN} ${JENKINS_CREDENCIAL}"
           }
       }
   }
