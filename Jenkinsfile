@@ -7,8 +7,8 @@ pipeline {
   }
 
   environment {
-      GITHUB_CREDENCIAL = credentials('devops-longguikeji-github-token')
-      JENKINS_CREDENCIAL = credentials('devops-admin')
+      GITHUB_CREDENCIAL = credentials('devops-longguikeji github account')
+      JENKINS_CREDENCIAL = credentials('jenkins-admin-credential')
   }
 
   stages {
