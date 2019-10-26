@@ -85,9 +85,9 @@ initJenkinsfile() {
 
 createCIInitBranch() {
   echo "begin createCIInitBranch"
-
   git clone https://github.com/${REPO_ACCOUNT}/${REPO_NAME}.git
   cd ${REPO_NAME}
+  git config -l
   git checkout -b ci_init
   cp ../Dockerfile .
   cp -r ../devops .
@@ -212,6 +212,7 @@ if [[ -z ${REPO_NAME} ]]; then
   exit -1
 fi
 
+git config -l
 initMakefile
 initDockerfile
 createJenkinsJobs
